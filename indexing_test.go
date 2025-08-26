@@ -1,0 +1,35 @@
+package main
+
+import (
+	"fmt"
+	"testing"
+)
+
+func TestReadWalk(t *testing.T) {
+	files := ReadWalk("/Users/maxgara/Desktop")
+	//	for k, _ := range allFiletypes {
+	//		fmt.Println(k)
+	//	}
+	fmt.Printf("targets: %d\n", len(files))
+}
+
+func TestFileWords(t *testing.T) {
+	words := fileWords("/Users/maxgara/Desktop/test.c")
+	fmt.Println(words)
+}
+
+func TestHash(t *testing.T) {
+	words := fileWords("/Users/maxgara/Desktop/test.c")
+	for _, w := range words {
+		bts := []byte(w)
+		h := hash(bts)
+		fmt.Printf("%s => %x\n", w, h)
+	}
+}
+
+func TestAddFileKeys(t *testing.T) {
+	var dx Dictionary
+	addFileKeys("/Users/maxgara/Desktop/test.c", &dx)
+	addFileKeys("/Users/maxgara/Desktop/rules.txt", &dx)
+	fmt.Println(dx)
+}
