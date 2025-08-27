@@ -194,40 +194,61 @@ func dedupDictionary(dx *Dictionary) {
 }
 
 const DICTIONARY_MAX_SIZE = 1000000
+const DCOUNT_MAX = 3
 
 func dictFromDir(root string) Dictionary {
 	//print progress updates
 	dx := Dictionary{}
+	var dcount int
 	var stop bool
+	var fullstop bool
+	starter := make(chan bool) //used to coordinate writing dx to disk and restart of indexing process
 	go func() {
 		for {
 			fmt.Printf("read %v files, stored %v wlocs\n", len(dx.files), len(dx.data))
 			if len(dx.data) > DICTIONARY_MAX_SIZE {
+				if dcount == DCOUNT_MAX {
+					fmt.Println("hit DCOUNT_MAX")
+					fullstop = true
+					return
+				}
 				fmt.Printf("Dictionary hit size limit %d\n", DICTIONARY_MAX_SIZE)
 				stop = true
-				break
+				<-starter //wait for indexing to stop
+				sortDictionary(&dx)
+				dedupDictionary(&dx)
+				f, _ := os.Create(fmt.Sprintf("dx%v.txt", dcount))
+				dx.fPrint(f)
+				dcount++
+				dx = Dictionary{}
+				stop = false
+				starter <- true //continue indexing
 			}
 			time.Sleep(time.Second / 10)
 		}
 	}()
-	rdfd(&dx, root, &stop)
+	rdfd(&dx, root, &stop, starter, &fullstop)
 	sortDictionary(&dx)
 	dedupDictionary(&dx)
 	return dx
 }
-func rdfd(dx *Dictionary, dir string, done *bool) {
+func rdfd(dx *Dictionary, dir string, stop *bool, starter chan bool, fullstop *bool) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		fmt.Printf("ReadWalk dir: %s: %v\n", dir, err)
 	}
 	for _, f := range files {
-		if *done {
+		if *fullstop {
 			return
+		}
+		if *stop {
+			starter <- true //tell parent that indexing has stopped
+			<-starter       //wait for parent to confirm continue OK
 		}
 		nm := f.Name()
 		full := fmt.Sprintf("%v/%v", dir, nm)
 		if f.IsDir() {
-			rdfd(dx, full, done)
+			rdfd(dx, full, stop, starter, fullstop)
 			continue
 		}
 		for i := len(nm) - 2; i >= 0; i-- {
