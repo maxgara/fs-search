@@ -159,6 +159,16 @@ func (dx Dictionary) String() string {
 	}
 	return s
 }
+func (dx Dictionary) fPrint(f io.Writer) string {
+	for i, name := range dx.files {
+		f.WriteString(f, fmt.Sprintf("%d: %s\n", i, name))
+	}
+	s += "  ***\n"
+	for _, d := range dx.data {
+		f.WriteString(f, fmt.Sprintf("%.8x %v\n", d.key, d.fidx))
+	}
+	return s
+}
 
 // temporary implementation
 func sortDict(dx *Dictionary) {
