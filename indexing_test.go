@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"testing"
 )
 
@@ -38,7 +39,7 @@ func TestSortDictionary(t *testing.T) {
 	var dx Dictionary
 	addFileKeys("/Users/maxgara/Desktop/test.c", &dx)
 	addFileKeys("/Users/maxgara/Desktop/rules.txt", &dx)
-	sortDict(&dx)
+	sortDictionary(&dx)
 	fmt.Println(dx)
 }
 
@@ -46,12 +47,15 @@ func TestDedupDictionary(t *testing.T) {
 	var dx Dictionary
 	addFileKeys("/Users/maxgara/Desktop/test.c", &dx)
 	addFileKeys("/Users/maxgara/Desktop/rules.txt", &dx)
-	sortDict(&dx)
+	sortDictionary(&dx)
 	dedupDictionary(&dx)
 	fmt.Println(dx)
 }
 func TestDictFromDir(t *testing.T) {
 	dx := dictFromDir("/Users/maxgara/Desktop")
+	f, _ := os.Create("dedupDictionaryOutput.txt")
+	dx.fPrint(f)
 	fmt.Println("TEST DONE")
-	fmt.Println(dx)
+	//dx.fPrint(os.Stdout)
+	//fmt.Println(dx)
 }

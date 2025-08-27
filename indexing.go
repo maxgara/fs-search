@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"sort"
@@ -138,7 +139,7 @@ func addFileKeys(path string, dx *Dictionary) {
 
 // implement sort.Interface
 func (dx *Dictionary) Less(i, j int) bool {
-	return dx.data[i].key < dx.data[j].key
+	return dx.data[i].key < dx.data[j].key || ((dx.data[i].key == dx.data[j].key) && (dx.data[i].fidx < dx.data[j].fidx))
 }
 func (dx *Dictionary) Swap(i, j int) {
 	dx.data[i], dx.data[j] = dx.data[j], dx.data[i]
@@ -159,24 +160,27 @@ func (dx Dictionary) String() string {
 	}
 	return s
 }
-func (dx Dictionary) fPrint(f io.Writer) string {
+func (dx Dictionary) fPrint(f io.Writer) {
 	for i, name := range dx.files {
-		f.WriteString(f, fmt.Sprintf("%d: %s\n", i, name))
+		io.WriteString(f, fmt.Sprintf("%d: %s\n", i, name))
 	}
-	s += "  ***\n"
+	io.WriteString(f, "  ***\n")
 	for _, d := range dx.data {
-		f.WriteString(f, fmt.Sprintf("%.8x %v\n", d.key, d.fidx))
+		io.WriteString(f, fmt.Sprintf("%.8x %v\n", d.key, d.fidx))
 	}
-	return s
 }
 
 // temporary implementation
-func sortDict(dx *Dictionary) {
+func sortDictionary(dx *Dictionary) {
+	fmt.Println("sorting dictionary")
 	sort.Sort(dx)
+	fmt.Println("sorted")
 }
 
 // temporary implementation?
 func dedupDictionary(dx *Dictionary) {
+	fmt.Println("deduping")
+	fmt.Printf("initial size: %v wlocs\n", len(dx.data))
 	dat := dx.data
 	ndat := []wloc{dat[0]}
 	for i := range dat[1:] {
@@ -186,38 +190,43 @@ func dedupDictionary(dx *Dictionary) {
 		ndat = append(ndat, dat[i+1])
 	}
 	dx.data = ndat
+	fmt.Printf("final size: %v wlocs\n", len(dx.data))
 }
+
+const DICTIONARY_MAX_SIZE = 1000000
 
 func dictFromDir(root string) Dictionary {
 	//print progress updates
 	dx := Dictionary{}
 	var stop bool
-	go rdfd(&dx, root, &stop)
-	for {
-		fmt.Printf("read %v files, stored %v wlocs\n", len(dx.files), len(dx.data))
-		if len(dx.files) > 10 {
-			stop = true
-			break
+	go func() {
+		for {
+			fmt.Printf("read %v files, stored %v wlocs\n", len(dx.files), len(dx.data))
+			if len(dx.data) > DICTIONARY_MAX_SIZE {
+				fmt.Printf("Dictionary hit size limit %d\n", DICTIONARY_MAX_SIZE)
+				stop = true
+				break
+			}
+			time.Sleep(time.Second / 10)
 		}
-		time.Sleep(time.Second)
-	}
+	}()
+	rdfd(&dx, root, &stop)
+	sortDictionary(&dx)
+	dedupDictionary(&dx)
 	return dx
 }
 func rdfd(dx *Dictionary, dir string, done *bool) {
-	if *done {
-		return
-	}
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		fmt.Printf("ReadWalk dir: %s: %v\n", dir, err)
 	}
 	for _, f := range files {
+		if *done {
+			return
+		}
 		nm := f.Name()
 		full := fmt.Sprintf("%v/%v", dir, nm)
 		if f.IsDir() {
-			if *done {
-				return
-			}
 			rdfd(dx, full, done)
 			continue
 		}
