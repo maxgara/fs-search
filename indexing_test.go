@@ -33,3 +33,25 @@ func TestAddFileKeys(t *testing.T) {
 	addFileKeys("/Users/maxgara/Desktop/rules.txt", &dx)
 	fmt.Println(dx)
 }
+
+func TestSortDictionary(t *testing.T) {
+	var dx Dictionary
+	addFileKeys("/Users/maxgara/Desktop/test.c", &dx)
+	addFileKeys("/Users/maxgara/Desktop/rules.txt", &dx)
+	sortDict(&dx)
+	fmt.Println(dx)
+}
+
+func TestDedupDictionary(t *testing.T) {
+	var dx Dictionary
+	addFileKeys("/Users/maxgara/Desktop/test.c", &dx)
+	addFileKeys("/Users/maxgara/Desktop/rules.txt", &dx)
+	sortDict(&dx)
+	dedupDictionary(&dx)
+	fmt.Println(dx)
+}
+func TestDictFromDir(t *testing.T) {
+	dx := dictFromDir("/Users/maxgara/Desktop")
+	fmt.Println("TEST DONE")
+	fmt.Println(dx)
+}
