@@ -108,16 +108,16 @@ func addFileKeys(path string, dx *Dictionary) {
 		fmt.Printf("fileWords error reading %s: %v\n", path, err)
 		return
 	}
-	//var words []string
+	sraw := string(raw)
 	var startIdx int
 	var hasLetter bool
-	for i, b := range string(raw) {
+	for i, b := range sraw {
 		//non-word char case (end word):
 		if !unicode.IsLetter(b) && !unicode.IsNumber(b) {
 			//skip words with 0 letters
 			if hasLetter {
 				//push wloc entry
-				s := string(raw)[startIdx:i]
+				s := sraw[startIdx:i]
 				ent := wloc{key: hash([]byte(s)), fidx: len(dx.files)}
 				dx.data = append(dx.data, ent)
 				//reset word detection
