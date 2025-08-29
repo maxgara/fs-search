@@ -6,6 +6,8 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 	"unicode"
 )
@@ -102,6 +104,8 @@ type wloc struct {
 	fidx int
 }
 
+var hashtable map[uint32]string
+
 func addFileKeys(path string, dx *Dictionary) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -117,8 +121,14 @@ func addFileKeys(path string, dx *Dictionary) {
 			//skip words with 0 letters
 			if hasLetter {
 				//push wloc entry
-				s := sraw[startIdx:i]
-				ent := wloc{key: hash([]byte(s)), fidx: len(dx.files)}
+				//s := sraw[startIdx:i]
+				if HASHTABLE {
+					if hashtable == nil {
+						hashtable = make(map[uint32]string)
+					}
+					hashtable[hash([]byte(sraw[startIdx:i]))] = sraw[startIdx:i]
+				}
+				ent := wloc{key: hash([]byte(sraw[startIdx:i])), fidx: len(dx.files)} //avoid copying string
 				dx.data = append(dx.data, ent)
 				//reset word detection
 				hasLetter = false
@@ -182,7 +192,7 @@ func dedupDictionary(dx *Dictionary) {
 	fmt.Println("deduping")
 	fmt.Printf("initial size: %v wlocs\n", len(dx.data))
 	dat := dx.data
-	ndat := []wloc{dat[0]}
+	ndat := []wloc{dat[0]} //confusing
 	for i := range dat[1:] {
 		if dat[i] == dat[i+1] {
 			continue
@@ -193,36 +203,49 @@ func dedupDictionary(dx *Dictionary) {
 	fmt.Printf("final size: %v wlocs\n", len(dx.data))
 }
 
-const DICTIONARY_MAX_SIZE = 1000000
-const DCOUNT_MAX = 3
+const DICTIONARY_MAX_SIZE = 1000000 //word count which triggers dumping to disk.
+const DICTIONARY_MAX_COUNT = 30     //maximum number of dicts written to disk before indexer gives up.
+const HASHTABLE = true              //save list of all words and hashes in a file, for debugging
 
-func dictFromDir(root string) Dictionary {
+// index directory. dumps data to index files when wloc count exceeds DICTIONARY_MAX_COUNT, creates a maximum of DCOUNT index files.
+// any dictionary data not dumped is returned.
+func indexDir(root string) Dictionary {
 	//print progress updates
 	dx := Dictionary{}
+	if HASHTABLE {
+		hashtable = make(map[uint32]string)
+	}
 	var dcount int
 	var stop bool
 	var fullstop bool
-	starter := make(chan bool) //used to coordinate writing dx to disk and restart of indexing process
+	starter := make(chan bool) //used to coordinate writing dx to disk then restart of indexing process
 	go func() {
 		for {
 			fmt.Printf("read %v files, stored %v wlocs\n", len(dx.files), len(dx.data))
 			if len(dx.data) > DICTIONARY_MAX_SIZE {
-				if dcount == DCOUNT_MAX {
+				if dcount == DICTIONARY_MAX_COUNT {
 					fmt.Println("hit DCOUNT_MAX")
 					fullstop = true
 					return
 				}
 				fmt.Printf("Dictionary hit size limit %d\n", DICTIONARY_MAX_SIZE)
-				stop = true
-				<-starter //wait for indexing to stop
+				stop = true //flag to request indexer stop
+				<-starter   //signal from indexer that dict is good to write
 				sortDictionary(&dx)
 				dedupDictionary(&dx)
 				f, _ := os.Create(fmt.Sprintf("dx%v.txt", dcount))
+				if HASHTABLE {
+					hf, _ := os.Create(fmt.Sprintf("hashes%v.txt", dcount))
+					for h, s := range hashtable {
+						fmt.Fprintf(hf, "%.8x %s\n", h, s)
+					}
+					hashtable = make(map[uint32]string)
+				}
 				dx.fPrint(f)
 				dcount++
 				dx = Dictionary{}
 				stop = false
-				starter <- true //continue indexing
+				starter <- true //signal to indexer - continue indexing
 			}
 			time.Sleep(time.Second / 10)
 		}
@@ -242,11 +265,15 @@ func rdfd(dx *Dictionary, dir string, stop *bool, starter chan bool, fullstop *b
 			return
 		}
 		if *stop {
-			starter <- true //tell parent that indexing has stopped
+			starter <- true //tell parent that indexing has stopped, proceed with write
 			<-starter       //wait for parent to confirm continue OK
 		}
 		nm := f.Name()
 		full := fmt.Sprintf("%v/%v", dir, nm)
+		//don't index indexfiles *** TODO: make this more portable ***
+		if strings.HasPrefix(full, "/Users/maxgara/Desktop/fs-search") {
+			continue
+		}
 		if f.IsDir() {
 			rdfd(dx, full, stop, starter, fullstop)
 			continue
@@ -262,4 +289,48 @@ func rdfd(dx *Dictionary, dir string, stop *bool, starter chan bool, fullstop *b
 			break
 		}
 	}
+}
+
+// get filenames containing s
+func search(s string) []string {
+	key := hash([]byte(s))
+	var matches []string
+	files, _ := os.ReadDir(s)
+	for _, f := range files {
+		if !strings.HasPrefix(f.Name(), "dx") {
+			continue
+		}
+		dx := loadDictionary(f.Name())
+		for _, d := range dx.data {
+			if d.key == key {
+				matches = append(matches, dx.files[d.fidx])
+			}
+		}
+	}
+	return matches
+}
+
+func loadDictionary(f string) Dictionary {
+	data, err := os.ReadFile(f)
+	if err != nil {
+		fmt.Printf("couldn't read Dictionary from file %v: %v\n", f, err)
+	}
+	dataSplit := strings.Split(string(data), "\n  ***\n")
+	pstrs := strings.Split(dataSplit[0], "\n") //path strings
+	wstrs := strings.Split(dataSplit[1], "\n") //wloc strings
+	var files []string
+	for i := range pstrs {
+		//ex pstr: 30: /Users/maxgara/Desktop/go-code/gobook/workspace/graph/rewrite/example-goal.html
+		path := strings.Split(pstrs[i], ": ")[1]
+		files = append(files, path)
+	}
+	var wls []wloc
+	for i := range wstrs[:len(wstrs)-1] {
+		splt := strings.Fields(wstrs[i])
+		h, _ := strconv.ParseUint(splt[0], 16, 32)
+		fidx, _ := strconv.ParseInt(splt[1], 10, 32)
+		wl := wloc{key: uint32(h), fidx: int(fidx)}
+		wls = append(wls, wl)
+	}
+	return Dictionary{files: files, data: wls}
 }

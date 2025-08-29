@@ -52,10 +52,20 @@ func TestDedupDictionary(t *testing.T) {
 	fmt.Println(dx)
 }
 func TestDictFromDir(t *testing.T) {
-	dx := dictFromDir("/Users/maxgara/Desktop")
+	dx := indexDir("/Users/maxgara")
 	f, _ := os.Create("dedupDictionaryOutput.txt")
 	dx.fPrint(f)
 	fmt.Println("TEST DONE")
 	//dx.fPrint(os.Stdout)
 	//fmt.Println(dx)
+}
+
+func TestLoadDictionary(t *testing.T) {
+	dx := loadDictionary("dx6.txt")
+	dx.fPrint(os.Stdout)
+}
+
+func TestSearch(t *testing.T) {
+	matches := search("package")
+	fmt.Println(matches)
 }
