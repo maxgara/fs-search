@@ -66,6 +66,8 @@ func TestLoadDictionary(t *testing.T) {
 }
 
 func TestSearch(t *testing.T) {
-	matches := search("package")
-	fmt.Println(matches)
+	matches := search("thisisatestfileforfssearch")
+	for _, s := range matches {
+		fmt.Println(s)
+	}
 }

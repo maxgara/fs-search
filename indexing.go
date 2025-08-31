@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,17 @@ import (
 var TARGET_FILETYPES = []string{"json", "html", "csv", "py", "text", "c", "lua", "cpp", "sh", "txt", "xml", "yaml"}
 
 var allFiletypes map[string]bool
+
+func main() {
+	s := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Println("enter search term")
+		s.Scan()
+		fmt.Println("searching...")
+		matches := search(s.Text())
+		fmt.Println(matches)
+	}
+}
 
 // recursively read filenames in directory rootPath, return target file names
 func ReadWalk(rootpath string) []string {
@@ -207,8 +219,9 @@ const DICTIONARY_MAX_SIZE = 1000000 //word count which triggers dumping to disk.
 const DICTIONARY_MAX_COUNT = 30     //maximum number of dicts written to disk before indexer gives up.
 const HASHTABLE = true              //save list of all words and hashes in a file, for debugging
 
-// index directory. dumps data to index files when wloc count exceeds DICTIONARY_MAX_COUNT, creates a maximum of DCOUNT index files.
-// any dictionary data not dumped is returned.
+// index directory. dumps data to index files when wloc count exceeds DICTIONARY_MAX_SIZE, creates a maximum of DICTIONARY_MAX_COUNT
+// index files.  any dictionary data not dumped is returned.
+// because current file indexing finishes befor dictionary is witten to disk, wloc count may exceed DICTIONARY_MAX_SIZE
 func indexDir(root string) Dictionary {
 	//print progress updates
 	dx := Dictionary{}
@@ -295,11 +308,12 @@ func rdfd(dx *Dictionary, dir string, stop *bool, starter chan bool, fullstop *b
 func search(s string) []string {
 	key := hash([]byte(s))
 	var matches []string
-	files, _ := os.ReadDir(s)
+	files, _ := os.ReadDir("/Users/maxgara/Desktop/fs-search")
 	for _, f := range files {
 		if !strings.HasPrefix(f.Name(), "dx") {
 			continue
 		}
+		fmt.Printf("reading dict file %v\n", f.Name())
 		dx := loadDictionary(f.Name())
 		for _, d := range dx.data {
 			if d.key == key {
