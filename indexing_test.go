@@ -71,3 +71,19 @@ func TestSearch(t *testing.T) {
 		fmt.Println(s)
 	}
 }
+
+func TestFWriteData(t *testing.T) {
+	var dx Dictionary
+	addFileKeys("/Users/maxgara/Desktop/test.c", &dx)
+	fmt.Println(dx)
+	f, _ := os.Create("fwritedatatest.txt")
+	dx.fWriteData(f)
+}
+
+func TestFWriteFilenames(t *testing.T) {
+	var dx Dictionary
+	addFileKeys("/Users/maxgara/Desktop/test.c", &dx)
+	fmt.Println(dx)
+	f, _ := os.Create("fwritefilenamestest.txt")
+	dx.fWriteFilenames(f)
+}

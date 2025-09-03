@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -235,6 +236,7 @@ func indexDir(root string) Dictionary {
 	go func() {
 		for {
 			fmt.Printf("read %v files, stored %v wlocs\n", len(dx.files), len(dx.data))
+			//write to disk when dx size limit is hit
 			if len(dx.data) > DICTIONARY_MAX_SIZE {
 				if dcount == DICTIONARY_MAX_COUNT {
 					fmt.Println("hit DCOUNT_MAX")
@@ -268,6 +270,7 @@ func indexDir(root string) Dictionary {
 	dedupDictionary(&dx)
 	return dx
 }
+
 func rdfd(dx *Dictionary, dir string, stop *bool, starter chan bool, fullstop *bool) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
@@ -347,4 +350,28 @@ func loadDictionary(f string) Dictionary {
 		wls = append(wls, wl)
 	}
 	return Dictionary{files: files, data: wls}
+}
+
+func (dx *Dictionary) fWriteData(f io.Writer) {
+	//buf: hash(4 byte) + space(1 byte) + fileidx(4 byte) + \n(1 byte)
+	buf := make([]byte, 10)
+	for _, d := range dx.data {
+		_, err := binary.Encode(buf, binary.NativeEndian, struct {
+			hash    uint32
+			space   byte
+			fidx    uint32
+			newline byte
+		}{d.key, ' ', uint32(d.fidx), '\n'})
+		if err != nil {
+			fmt.Printf("fWriteData err: %v\n", err)
+			return
+		}
+		f.Write(buf)
+	}
+}
+
+func (dx *Dictionary) fWriteFilenames(f io.Writer) {
+	for _, name := range dx.files {
+		fmt.Fprintf(f, "%s\n", name)
+	}
 }
