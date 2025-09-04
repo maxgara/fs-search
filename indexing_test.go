@@ -52,9 +52,21 @@ func TestDedupDictionary(t *testing.T) {
 	fmt.Println(dx)
 }
 func TestDictFromDir(t *testing.T) {
-	dx := indexDir("/Users/maxgara")
+	dx := indexDir("/Users/maxgara/Desktop")
 	f, _ := os.Create("dedupDictionaryOutput.txt")
 	dx.fPrint(f)
+	fmt.Println("TEST DONE")
+	//dx.fPrint(os.Stdout)
+	//fmt.Println(dx)
+}
+
+// use binary filetype
+func TestDictFromDir2(t *testing.T) {
+	dx := indexDir("/Users/maxgara")
+	fd, _ := os.Create("dedupDictionaryOutput.txt")
+	fn, _ := os.Create("dedupDictionaryOutput.txt")
+	dx.fWriteData(fd)
+	dx.fWriteFilenames(fn)
 	fmt.Println("TEST DONE")
 	//dx.fPrint(os.Stdout)
 	//fmt.Println(dx)
@@ -86,4 +98,10 @@ func TestFWriteFilenames(t *testing.T) {
 	fmt.Println(dx)
 	f, _ := os.Create("fwritefilenamestest.txt")
 	dx.fWriteFilenames(f)
+}
+
+// depends on the two prior tests lol
+func TestLoadDictionary2(t *testing.T) {
+	dx := loadDictionary2("fwritefilenamestest.txt", "fwritedatatest.txt")
+	fmt.Println(dx)
 }

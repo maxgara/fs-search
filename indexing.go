@@ -25,7 +25,9 @@ func main() {
 		s.Scan()
 		fmt.Println("searching...")
 		matches := search(s.Text())
-		fmt.Println(matches)
+		for _, m := range matches {
+			fmt.Println(m)
+		}
 	}
 }
 
@@ -216,7 +218,7 @@ func dedupDictionary(dx *Dictionary) {
 	fmt.Printf("final size: %v wlocs\n", len(dx.data))
 }
 
-const DICTIONARY_MAX_SIZE = 1000000 //word count which triggers dumping to disk.
+const DICTIONARY_MAX_SIZE = 5000000 //word count which triggers dumping to disk.
 const DICTIONARY_MAX_COUNT = 30     //maximum number of dicts written to disk before indexer gives up.
 const HASHTABLE = true              //save list of all words and hashes in a file, for debugging
 
@@ -248,7 +250,9 @@ func indexDir(root string) Dictionary {
 				<-starter   //signal from indexer that dict is good to write
 				sortDictionary(&dx)
 				dedupDictionary(&dx)
-				f, _ := os.Create(fmt.Sprintf("dx%v.txt", dcount))
+				//f, _ := os.Create(fmt.Sprintf("dx%v.txt", dcount))
+				fd, _ := os.Create(fmt.Sprintf("dx%v_data.data", dcount))
+				fn, _ := os.Create(fmt.Sprintf("dx%v_fnames.txt", dcount))
 				if HASHTABLE {
 					hf, _ := os.Create(fmt.Sprintf("hashes%v.txt", dcount))
 					for h, s := range hashtable {
@@ -256,7 +260,9 @@ func indexDir(root string) Dictionary {
 					}
 					hashtable = make(map[uint32]string)
 				}
-				dx.fPrint(f)
+				//dx.fPrint(f)
+				dx.fWriteData(fd)
+				dx.fWriteFilenames(fn)
 				dcount++
 				dx = Dictionary{}
 				stop = false
@@ -313,11 +319,16 @@ func search(s string) []string {
 	var matches []string
 	files, _ := os.ReadDir("/Users/maxgara/Desktop/fs-search")
 	for _, f := range files {
-		if !strings.HasPrefix(f.Name(), "dx") {
+		//if !strings.HasPrefix(f.Name(), "dx") {
+		//continue
+		//}
+		if !strings.HasSuffix(f.Name(), "_fnames.txt") {
 			continue
 		}
-		fmt.Printf("reading dict file %v\n", f.Name())
-		dx := loadDictionary(f.Name())
+		istr := strings.TrimSuffix(f.Name(), "_fnames.txt")
+		istr = strings.TrimPrefix(istr, "dx")
+		fmt.Printf("reading dict #%v \n", istr)
+		dx := loadDictionary2(f.Name(), "dx"+istr+"_data.data")
 		for _, d := range dx.data {
 			if d.key == key {
 				matches = append(matches, dx.files[d.fidx])
@@ -352,6 +363,36 @@ func loadDictionary(f string) Dictionary {
 	return Dictionary{files: files, data: wls}
 }
 
+func loadDictionary2(namefile, datafile string) Dictionary {
+	var dx Dictionary
+	nb, err := os.ReadFile(namefile)
+	if err != nil {
+		fmt.Printf("couldn't read Dictionary from file %v: %v\n", namefile, err)
+	}
+	db, err := os.ReadFile(datafile)
+	if err != nil {
+		fmt.Printf("couldn't read Dictionary from file %v: %v\n", datafile, err)
+	}
+	names := strings.Split(string(nb), "\n")
+	dx.files = names[:len(names)-1] //drop the empty string after final newline
+	//each line of data in db is 10 bytes long - see fWriteData
+	for i := 0; i+10 < len(db); i += 10 {
+		var key, fidx uint32
+		_, err := binary.Decode(db[i:i+4], binary.NativeEndian, &key)
+		if err != nil {
+			fmt.Printf("error decoding data from %v: %v\n", datafile, err)
+			return dx
+		}
+		_, err = binary.Decode(db[i+5:i+9], binary.NativeEndian, &fidx)
+		if err != nil {
+			fmt.Printf("error decoding data from %v: %v\n", datafile, err)
+			return dx
+		}
+		dx.data = append(dx.data, wloc{key: key, fidx: int(fidx)})
+	}
+	return dx
+}
+
 func (dx *Dictionary) fWriteData(f io.Writer) {
 	//buf: hash(4 byte) + space(1 byte) + fileidx(4 byte) + \n(1 byte)
 	buf := make([]byte, 10)
@@ -373,5 +414,20 @@ func (dx *Dictionary) fWriteData(f io.Writer) {
 func (dx *Dictionary) fWriteFilenames(f io.Writer) {
 	for _, name := range dx.files {
 		fmt.Fprintf(f, "%s\n", name)
+	}
+}
+
+// completion node
+type compNode struct {
+	c       rune //last char in partial word
+	next    int  //index of child compnode array in dict
+	nextlen int  //len of child compnode array
+}
+
+func WildCardDict(fs []string) {
+	wcd := []compNode{}
+	set := "abcdefghijklmnopqrstuvwxyz" //replace with all unicode code points in fs
+	for _, c := range set {
+		wcd = append(wcd, compNode{c: c})
 	}
 }
