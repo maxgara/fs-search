@@ -5,5 +5,5 @@
 - list will be stored as an array of hashes and file indexes, written to disk
 - list will be sorted by hash (search key)
 - searches will use binary search to find key in sorted list
-- later iterations may experiment with higher level indexing and other optomization strategies
+- later iterations may experiment with higher level indexing and other optimization strategies
 
