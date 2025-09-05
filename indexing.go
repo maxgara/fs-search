@@ -313,6 +313,31 @@ func rdfd(dx *Dictionary, dir string, stop *bool, starter chan bool, fullstop *b
 	}
 }
 
+// binary search - get filenames containing s
+func search2(s string) []string {
+	key := hash([]byte(s))
+	var matches []string
+	files, _ := os.ReadDir("/Users/maxgara/Desktop/fs-search")
+	for _, f := range files {
+		//if !strings.HasPrefix(f.Name(), "dx") {
+		//continue
+		//}
+		if !strings.HasSuffix(f.Name(), "_fnames.txt") {
+			continue
+		}
+		istr := strings.TrimSuffix(f.Name(), "_fnames.txt")
+		istr = strings.TrimPrefix(istr, "dx")
+		fmt.Printf("reading dict #%v \n", istr)
+		dx := loadDictionary2(f.Name(), "dx"+istr+"_data.data")
+		for _, d := range dx.data {
+			if d.key == key {
+				matches = append(matches, dx.files[d.fidx])
+			}
+		}
+	}
+	return matches
+}
+
 // get filenames containing s
 func search(s string) []string {
 	key := hash([]byte(s))
@@ -424,10 +449,54 @@ type compNode struct {
 	nextlen int  //len of child compnode array
 }
 
+type compTable []compNode
+
+// create a wildcard dictionary to find partial matches for string fragments
 func WildCardDict(fs []string) {
 	wcd := []compNode{}
 	set := "abcdefghijklmnopqrstuvwxyz" //replace with all unicode code points in fs
 	for _, c := range set {
 		wcd = append(wcd, compNode{c: c})
 	}
+}
+
+// return index of next array in comptable
+func rwcd(fs []string, t *compTable, strpart string) int {
+	//group fs by letter occurring after part
+	//in some cases there will be more than one letter that meets this criteria - in this case, place string in both groups
+	part := []rune(strpart)
+	g := make(map[rune][]string)
+	for _, str := range fs {
+		f := []rune(str)
+		i := 0
+		for j := range f {
+			//if part does not match, start match over further in f
+			if part[i] != f[j] {
+				i = 0
+				continue
+			}
+			i++
+			//partial match case
+			if i < len(part) {
+				continue
+			}
+			//if part has fully matched, place f in map
+			//case where part is at the end of f (terminal match)
+			if j+1 >= len(f) {
+				g[0] = append(g[0], str) // unicode null
+				break
+			}
+			//non-terminal match
+			next := f[j+1]
+			g[next] = append(g[next], str)
+			i = 0
+		}
+	}
+	comps := make([]compNode, len(g))
+	for c := range g {
+		cn := compNode{c: c}
+		comps = append(comps, cn)
+	}
+	*t = append(*t, comps...)
+	return len(*t)
 }
