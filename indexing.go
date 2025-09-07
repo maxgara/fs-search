@@ -460,18 +460,20 @@ func WildCardDict(fs []string) {
 	}
 }
 
-// return index of next array in comptable
-func rwcd(fs []string, t *compTable, strpart string) int {
-	//group fs by letter occurring after part
-	//in some cases there will be more than one letter that meets this criteria - in this case, place string in both groups
+// add next and nextlen attributes for node, using partial word strpart and considering word possibilities fs
+func rwcd(fs []string, t *compTable, strpart string, node *compNode) {
+	//group words in fs by letter occurring after strpart
+	//in some cases there will be more than one letter that meets this criteria - in this case, place word in both groups
 	part := []rune(strpart)
 	g := make(map[rune][]string)
 	for _, str := range fs {
-		f := []rune(str)
+		s := []rune(str)
 		i := 0
-		for j := range f {
+		j := 0
+		for ; j < len(s); j++ {
 			//if part does not match, start match over further in f
-			if part[i] != f[j] {
+			if part[i] != s[j] {
+				j -= i
 				i = 0
 				continue
 			}
@@ -481,22 +483,31 @@ func rwcd(fs []string, t *compTable, strpart string) int {
 				continue
 			}
 			//if part has fully matched, place f in map
-			//case where part is at the end of f (terminal match)
-			if j+1 >= len(f) {
+			//special case where part is at the end of f (terminal match):
+			if j+1 >= len(s) {
 				g[0] = append(g[0], str) // unicode null
 				break
 			}
 			//non-terminal match
-			next := f[j+1]
-			g[next] = append(g[next], str)
+			nextc := s[j+1]
+			g[nextc] = append(g[nextc], str)
 			i = 0
 		}
 	}
-	comps := make([]compNode, len(g))
-	for c := range g {
+	//first fill in t with nextlen semi-blank compnodes, then recursively call rwcd on these nodes to add attributes
+	nodes := []compNode{}
+	nextfs := [][]string{}
+	for c, strs := range g {
 		cn := compNode{c: c}
-		comps = append(comps, cn)
+		nodes = append(nodes, cn)
+		nextfs = append(nextfs, strs)
 	}
-	*t = append(*t, comps...)
-	return len(*t)
+	*t = append(*t, nodes...)
+	for i := range nodes {
+		c := &nodes[i]
+		rwcd(nextfs[i], t, strpart+string(c.c), c)
+	}
+	//assign attrs. to node
+	node.next = len(*t)
+	node.nextlen = len(g)
 }
