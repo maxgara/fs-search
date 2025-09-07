@@ -106,10 +106,19 @@ func TestLoadDictionary2(t *testing.T) {
 	fmt.Println(dx)
 }
 
-// depends on the two prior tests lol
+
 func TestWildCardDict(t *testing.T) {
 	dx := loadDictionary2("fwritefilenamestest.txt", "fwritedatatest.txt")
- WildCardDict(dx.files)
+	wd := WildCardDict(dx.files)
+}
+
+type Dictionary struct {
+	files []string
+	data  []wloc
+}
+type wloc struct {
+	key  uint32
+	fidx int
 }
 
 // completion node
