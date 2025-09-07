@@ -1,6 +1,8 @@
+package main
+
 // completion node
 // next and nextlen refer to linked child compnodes in table
-// unless c is U+0000, in which case they refer to set of 
+// unless c is U+0000, in which case they refer to set of
 // string completions in strs.
 // U+0000 is a sentinel value for leaf node in compNode graph
 type compNode struct {
@@ -12,21 +14,31 @@ type compNode struct {
 type compTable []compNode
 
 type compGraph struct {
-    table compTable
-    strs []string
+	table compTable
+	strs  []string
 }
 
 // create a wildcard dictionary to find partial matches for string fragments
-func WildCardDict(fs []string) {
+func WildCardDict(fs []string) compGraph {
 	wcd := []compNode{}
 	set := "abcdefghijklmnopqrstuvwxyz" //replace with all unicode code points in fs?
+	table := compTable{}
+	leafarr := []string{}
 	for _, c := range set {
 		wcd = append(wcd, compNode{c: c})
 	}
+	for i, c := range set {
+		rwcd(fs, &table, &leafarr, string(c), &wcd[i])
+	}
+	return compGraph{table, leafarr}
 }
 
 // add next and nextlen attributes for node, using partial word strpart and considering word possibilities fs
-func rwcd(fs []string, t *compTable, strpart string, node *compNode) {
+func rwcd(fs []string, t *compTable, leafarr *[]string, strpart string, node *compNode) {
+	//don't change leaf nodes
+	if node.c == 0x0 {
+		return
+	}
 	//group words in fs by letter occurring after strpart
 	//in some cases there will be more than one letter that meets this criteria - in this case, place word in both groups
 	part := []rune(strpart)
@@ -59,18 +71,25 @@ func rwcd(fs []string, t *compTable, strpart string, node *compNode) {
 			i = 0
 		}
 	}
-	//first fill in t with nextlen semi-blank compnodes, then recursively call rwcd on these nodes to add attributes
+	//first fill in t with new compnodes, then recursively call rwcd on
+	// these nodes to add attributes. each new compnode must be contiguous here
 	nodes := []compNode{}
 	nextfs := [][]string{}
 	for c, strs := range g {
 		cn := compNode{c: c}
+		//leaf node case
+		if c == 0x0 {
+			cn.next = len(*leafarr)
+			cn.nextlen = len(strs)
+			*leafarr = append(*leafarr, strs...)
+		}
 		nodes = append(nodes, cn)
 		nextfs = append(nextfs, strs)
 	}
 	*t = append(*t, nodes...)
 	for i := range nodes {
 		c := &nodes[i]
-		rwcd(nextfs[i], t, strpart+string(c.c), c)
+		rwcd(nextfs[i], t, leafarr, strpart+string(c.c), c)
 	}
 	//assign attrs. to node
 	node.next = len(*t)
